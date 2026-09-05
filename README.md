@@ -2,8 +2,7 @@
 
 A working slice of a Cloud ERP system — purchase requisition workflow with enforced business rules, data integration from simulated peripheral systems (EDI, expense reimbursement), automated security/anomaly monitoring, and a GenAI-powered daily operations briefing.
 
-**Live demo:** _[add your Render URL here once deployed]_
-
+**Live demo:** https://erp-integration-hub-x4f1.onrender.com/
 ---
 
 ## Problem

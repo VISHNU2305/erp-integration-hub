@@ -1,8 +1,7 @@
 """
-FastAPI web layer — exposes the ERP Integration Hub as a real HTTP API.
+FastAPI web layer — exposes the ERP Integration Hub as a real HTTP API,
+and serves a styled dashboard at the root URL.
 
-This is the layer a frontend dashboard, another internal system, or
-(in Shibaura's real environment) other enterprise systems would call.
 Every endpoint here is a thin wrapper around the business logic already
 built and tested in erp_workflow.py, connectors.py, security_monitor.py,
 and genai_assistant.py — the API layer's job is only routing and
@@ -12,10 +11,12 @@ request/response shaping, never business logic itself.
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 import database as db
 from connectors import sync_all_peripheral_systems
+from dashboard import DASHBOARD_HTML
 from erp_workflow import WorkflowEngine, WorkflowError
 from genai_assistant import daily_ops_briefing, summarize_security_events
 from security_monitor import SecurityMonitor
@@ -26,14 +27,8 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# In-memory workflow engine for this running instance. Requisition
-# state lives here; persisted snapshots go to SQLite via database.py.
 engine = WorkflowEngine()
 
-
-# -----------------------------------------------------------------
-# Request/response schemas
-# -----------------------------------------------------------------
 
 class CreateRequisitionRequest(BaseModel):
     requester: str
@@ -46,10 +41,6 @@ class CreateRequisitionRequest(BaseModel):
 class ApproveRequest(BaseModel):
     approver: str
 
-
-# -----------------------------------------------------------------
-# Requisition workflow endpoints
-# -----------------------------------------------------------------
 
 @app.post("/requisitions")
 def create_requisition(body: CreateRequisitionRequest):
@@ -121,10 +112,6 @@ def list_requisitions(status: Optional[str] = None):
     return reqs
 
 
-# -----------------------------------------------------------------
-# Peripheral systems + security + GenAI endpoints
-# -----------------------------------------------------------------
-
 @app.post("/sync-peripheral-systems")
 def sync_peripheral_systems():
     peripheral_txns = sync_all_peripheral_systems()
@@ -158,8 +145,6 @@ def get_daily_briefing():
     event_rows = db.query(conn, "SELECT * FROM security_events")
     conn.close()
 
-    # Reconstruct lightweight objects for the summarizer, which expects
-    # attribute access (.severity, .amount, etc.) rather than dicts.
     from types import SimpleNamespace
     txns = [SimpleNamespace(**{**r, "source": SimpleNamespace(value=r["source"])}) for r in txn_rows]
     events = [SimpleNamespace(**r) for r in event_rows]
@@ -167,10 +152,6 @@ def get_daily_briefing():
     return {"briefing": daily_ops_briefing(txns, events)}
 
 
-@app.get("/")
-def root():
-    return {
-        "service": "ERP Integration Hub",
-        "status": "running",
-        "docs": "/docs",
-    }
+@app.get("/", response_class=HTMLResponse)
+def dashboard():
+    return DASHBOARD_HTML
